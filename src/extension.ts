@@ -1,7 +1,7 @@
 import * as vs from 'vscode';
 import cp from 'child_process';
-import { API, GitExtension } from './external/git';
 import { Log } from './class/log';
+import { ExtensionConfig } from './class/extension_config';
 
 const log = new Log();
 export async function activate(context: vs.ExtensionContext) {
@@ -13,144 +13,95 @@ export function deactivate() { }
 async function registerCommands(context: vs.ExtensionContext) {
 	const pushToGerritCommand =
 		vs.commands.registerCommand('turbogerrit.pushToGerrit', pushToGerrit);
+	const initialSetupCommand =
+		vs.commands.registerCommand('turbogerrit.initialSetup', initialSetup);
 
 	context.subscriptions.push(pushToGerritCommand);
+	context.subscriptions.push(initialSetupCommand);
+}
+
+async function initialSetup() {
+	const config = new ExtensionConfig();
+	await config.setUsername();
 }
 
 async function pushToGerrit() {
-	let window = vs.window;
-	log.i('Waiting for git API...');
-	const git: API | null | undefined = await getScmGitApiCore();
-	if (git === undefined || git === null) {
-		log.vsE('Git API is unavailable yet, try later.');
-	}
-	log.i('Git API recieved, unpacking repo...');
-	if (git!.repositories.length > 1) {
-		log.vsE('Git instace of current workspace contains more than one repository.');
-		return;
-	}
-	const repo = git!.repositories[0];
-	const hasCommits = repo.state?.HEAD?.ahead !== 0;
-	if (!hasCommits) {
-		log.vsE('Nothing to push! Hack some commit before calling this command.');
-		return;
-	}
-
-	const currentBranchName = repo?.state?.HEAD?.name;
-	if (currentBranchName === undefined || currentBranchName.length === null) {
-		log.vsE(`Current branch name seems incorrect: ${currentBranchName}`);
-		return;
-	}
-
-	log.i('Fetching config...');
-	let config = vs.workspace.getConfiguration('turbogerrit');
-	let reviwers = config.get<Array<string>>('turbogerrit.revievers');
-	let hasReviewers = reviwers === undefined || reviwers.length === 0;
-
-	log.i('Creating process...');
-	let workspaces = vs.workspace.workspaceFolders;
-	if (workspaces === undefined || workspaces.length === 0) {
-		log.vsE(`Can't fetch current working directory, try to run "git review ${currentBranchName} --yes" in terminal`);
-		return;
-	}
-	let cd = workspaces[0].uri.path;
-
-
-	cp.exec(`cd ${cd} && git review ${currentBranchName} --yes --reviewers ${hasReviewers ? reviwers?.join(' ') : ''}`,
-		// mock command // cp.exec(`cd ${cd} && hehe -a`,
-		(err, stdout, stderr) => {
-			log.e(`STDERR: ${stderr}`);
-			log.e(`STDOUT: ${stdout}`);
-			log.e(`ERR: ${err?.message}`);
-			log.e(`ERR CODE: ${err?.code}`);
-			let exitCode = err?.code;
-			switch (exitCode) {
-				case null:
-				case 0:
-					log.vsI('Sucsessfully pushed to refs/for/${currentBranchName}');
-					return;
-				case 1:
-					log.vsE('Something went wrong, see Output > TurboGerrit for more info...');
-					log.e(`STDOUT: ${stdout}`);
-					log.e(`ERR: ${err?.message}`);
-					log.e(`ERR CODE: ${err?.code}`);
-					log.e(`STDERR: ${stderr}`);
-					return;
-				case 127:
-				case 9009:
-					log.e('got 127 or 9009, means "git review" is not installed, asking for install...');
-					vs.window.showInformationMessage(
-						'git review is not installed, do you want to install it?',
-						'Install using Brew',
-						'Install using Pip',
-					).then((selected) => {
-						switch (selected) {
-							case "Install using Brew":
-								installGitReviewUsingBrew(cd);
-								return;
-							case "Install using Pip":
-								installGitReviewUsingPy(cd);
-								return;
-						}
-					});
-			}
-		},
-	);
-
-}
-
-async function installGitReviewUsingBrew(cd: string) {
-	cp.exec(`cd ${cd} && brew install git-review`, (err, stdout, stderr) => {
-		let exitCode = err?.code;
-		switch (exitCode) {
-			case null:
-			case 0:
-				log.vsI('git review successfully installed, you can try to push again :)');
+	let config: ExtensionConfig = new ExtensionConfig();
+	const gitReview = config.parseGitReviewFile();
+	const username = config.getUsername();
+	const hasCommits = config.hasCommits;
+	const currentBranch = config.currentBranch;
+	const cwd = config.cwd;
+	if (username === null) {
+		vs.window.showInformationMessage('TurboGerrit: I dont know your username. Do you want to set username in settings?',
+			'Sure').then(async (selected) => {
+				if (selected === undefined) return;
+				await config.setUsername();
 				return;
-			case 127:
-			case 9009:
-				vs.window.showErrorMessage('"brew" is not installed', 'Visit git-review website').then(() => {
-					vs.env.openExternal(vs.Uri.parse('https://docs.opendev.org/opendev/git-review/latest/installation.html'));
-				});
-			default:
-				log.vsE('Error: try to run "brew install git-review" in terminal. See Output > TurboGerrit for detailed info.');
-				log.e(`STDOUT: ${stdout}`);
-				log.e(`ERR: ${err?.message}`);
-				log.e(`ERR CODE: ${err?.code}`);
-				log.e(`STDERR: ${stderr}`);
-		}
-	});
-}
-
-async function installGitReviewUsingPy(cd: string) {
-	cp.exec(`cd ${cd} && pip install git-review`, (err, stdout, stderr) => {
-		let exitCode = err?.code;
-		switch (exitCode) {
-			case null:
-			case 0:
-				log.vsI('git review successfully installed, you can try to push again :)');
+			});
+		return;
+	}
+	if (gitReview === null) {
+		vs.window.showInformationMessage('TurboGerrit: I cant find your .gitreview file. Do you want to set path in settings?',
+			'Sure').then(async (selected) => {
+				if (selected === undefined) return;
+				await config.setGitReviewPath();
 				return;
-			case 127:
-			case 9009:
-				vs.window.showErrorMessage('"pip" is not installed', 'Visit git-review website').then(() => {
-					vs.env.openExternal(vs.Uri.parse('https://docs.opendev.org/opendev/git-review/latest/installation.html'));
+			});
+		return;
+	}
+	if (cwd === null || currentBranch === null) {
+		log.vsE("Open workspace, or wait until it's initialization.");
+		return;
+	}
+	if (hasCommits === null) {
+		log.vsE('Nothing to commit. Hack some code, then call this command again.');
+		return;
+	}
+
+	const command = `cd ${cwd} && git push ssh://${username}@${gitReview.host}:${gitReview.port}/${gitReview.project} HEAD:refs/for/${currentBranch}${config.reviewersAttribute}`;
+	log.i('Executing:');
+	log.i(command);
+	await vs.window.withProgress({
+		location: vs.ProgressLocation.Notification,
+		title: `Pushing to refs/for/${currentBranch}`,
+	}, () => {
+		return new Promise<void>(async resolve => {
+			cp.exec(command,
+				(err, stdout, stderr) => {
+					onPushExecuted(err, stdout, stderr, currentBranch);
+					resolve();
 				});
-			default:
-				log.vsE('Error: try to run "py install git-review" in terminal. See Output > TurboGerrit for detailed info.');
-				log.e(`STDOUT: ${stdout}`);
-				log.e(`ERR: ${err?.message}`);
-				log.e(`ERR CODE: ${err?.code}`);
-				log.e(`STDERR: ${stderr}`);
-		}
+		});
 	});
+
 }
 
-async function getScmGitApiCore() {
-	const extension = vs.extensions.getExtension<GitExtension>('vscode.git');
-	if (!extension || extension === null) return null;
-	const gitExtension = extension.isActive ? extension.exports : await extension.activate();
-	let api = gitExtension?.getAPI(1);
-	return api;
+function onPushExecuted(err: cp.ExecException | null, stdout: string, stderr: string, currentBranch: string) {
+	log.logCpContent(err, stdout, stderr);
+	let exitCode = err?.code;
+	if (stderr?.includes('Could not resolve hostname')) {
+		log.vsE('Could not connect to Gerrit. Maybe you forgot to turn on the VPN?');
+		return;
+	}
+	if (stderr?.includes('no new changes')) {
+		log.vsE('Rejected from remote, nothing to push.');
+		return;
+	}
+	if (exitCode === undefined) { 
+		log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
+		return;
+	}
+	switch (exitCode) {
+		case 1:
+		case 2:
+			log.vsE('Something went wrong, see Output > TurboGerrit for more info...');
+			return;
+		case 127:
+		case 9009:
+			log.vsE('"ssh" is not installed');
+			return;
+	}
 }
 
 exports = {

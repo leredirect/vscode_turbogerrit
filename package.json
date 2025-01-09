@@ -2,7 +2,7 @@
   "name": "turbogerrit",
   "displayName": "turbogerrit",
   "description": "SSH-only client for Gerrit Code Review",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": "https://github.com/leredirect/vscode_turbogerrit",
   "engines": {
     "vscode": "^1.96.0"
@@ -28,18 +28,31 @@
           "group": "TurboGerrit"
         }
       ]
-    }
-  },
-  "configuration": {
-    "title": "TurboGerrit",
-    "properties": {
-      "turbogerrit.revievers": {
-        "type": [
-          "array",
-          "null"
-        ],
-        "default": null,
-        "description": "Predefined reviewers emails."
+    },
+    "configuration": {
+      "title": "TurboGerrit",
+      "properties": {
+        "turbogerrit.reviewers": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "Predefined reviewers emails."
+        },
+        "turbogerrit.gitreviewPath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": ".gitreview custom path"
+        },
+        "turbogerrit.username": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Gerrit Code Review username"
+        }
       }
     }
   },
@@ -52,14 +65,18 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.96.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/ssh2": "^1.15.3",
+    "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",
-    "eslint": "^9.16.0",
-    "typescript": "^5.7.2",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.16.0",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "node-ssh": "^13.2.0"
   }
 }
