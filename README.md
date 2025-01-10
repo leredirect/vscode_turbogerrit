@@ -20,6 +20,10 @@ This extension contributes the following settings:
 
 Users appreciate release notes as you update your extension.
 
+### 0.0.3
+- correct separator for revirewers attr
+- proper success handler
+
 ### 0.0.2
 
 - using plain ssh instead git-review

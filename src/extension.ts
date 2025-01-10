@@ -88,18 +88,20 @@ function onPushExecuted(err: cp.ExecException | null, stdout: string, stderr: st
 		log.vsE('Rejected from remote, nothing to push.');
 		return;
 	}
-	if (exitCode === undefined) { 
+	if (exitCode === undefined) {
 		log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
 		return;
 	}
 	switch (exitCode) {
-		case 1:
-		case 2:
-			log.vsE('Something went wrong, see Output > TurboGerrit for more info...');
+		case 0:
+			log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
 			return;
 		case 127:
 		case 9009:
 			log.vsE('"ssh" is not installed');
+			return;
+		default:
+			log.vsE('Something went wrong, see Output > TurboGerrit for more info...');
 			return;
 	}
 }

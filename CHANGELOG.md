@@ -1,4 +1,10 @@
 # Change Log
+
+## [0.0.3]
+
+- correct separator for revirewers attr
+- proper success handler
+
 ## [0.0.2]
 
 - using plain ssh instead git-review

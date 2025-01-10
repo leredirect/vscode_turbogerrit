@@ -14,7 +14,7 @@ export class ExtensionConfig {
     // reviewers config
     get reviewersAttribute() {
         const reviewers = this.getReviewers();
-        return reviewers !== null ? `%r=${reviewers.join(',')}` : '';
+        return reviewers !== null ? `%r=${reviewers.join(',r=')}` : '';
     }
     private reviewersKey: string = 'reviewers';
     private getReviewers(): Array<string> | null {
