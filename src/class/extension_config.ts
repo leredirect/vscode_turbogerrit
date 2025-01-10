@@ -66,7 +66,7 @@ export class ExtensionConfig {
         const usernameInput = await vs.window.showInputBox({
             title: "Gerrit Code Review email:"
         }) ?? null;
-        await this.config.update(this.usernameKey, usernameInput);
+        await this.config.update(this.usernameKey, usernameInput, 1);
     }
 
     getUsername(): string | null {

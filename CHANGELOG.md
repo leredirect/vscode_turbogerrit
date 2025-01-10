@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.0.4]
+
+- global config prioritized for username
+
 ## [0.0.3]
 
 - correct separator for revirewers attr

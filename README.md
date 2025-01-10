@@ -20,6 +20,9 @@ This extension contributes the following settings:
 
 Users appreciate release notes as you update your extension.
 
+### 0.0.4
+- global config prioritized for username
+
 ### 0.0.3
 - correct separator for revirewers attr
 - proper success handler

@@ -2,7 +2,7 @@
   "name": "turbogerrit",
   "displayName": "turbogerrit",
   "description": "SSH-only client for Gerrit Code Review",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "repository": "https://github.com/leredirect/vscode_turbogerrit",
   "engines": {
     "vscode": "^1.96.0"
