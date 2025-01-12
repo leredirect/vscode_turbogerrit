@@ -1,112 +1,250 @@
 import * as vs from 'vscode';
-import cp from 'child_process';
+import cp, { exec } from 'child_process';
 import { Log } from './class/log';
 import { ExtensionConfig } from './class/extension_config';
+import { GerritDataProvider, GerritFileItem, GerritReplyItem, GerritReviewItem, GerritURLItem } from './class/treeview';
+import { MemFS } from './class/fs';
 
 const log = new Log();
 export async function activate(context: vs.ExtensionContext) {
-	await registerCommands(context);
+    await registerCommands(context);
 }
 
 export function deactivate() { }
 
 async function registerCommands(context: vs.ExtensionContext) {
-	const pushToGerritCommand =
-		vs.commands.registerCommand('turbogerrit.pushToGerrit', pushToGerrit);
-	const initialSetupCommand =
-		vs.commands.registerCommand('turbogerrit.initialSetup', initialSetup);
+    const memFs = new MemFS();
+    const gerritDataProvider = new GerritDataProvider(log);
+    const treeView = vs.window.createTreeView('turbogerrit.scmView', {
+        treeDataProvider: gerritDataProvider,
+    });
 
-	context.subscriptions.push(pushToGerritCommand);
-	context.subscriptions.push(initialSetupCommand);
+
+    const pushToGerritCommand =
+        vs.commands.registerCommand('turbogerrit.pushToGerrit', pushToGerrit);
+    const initialSetupCommand =
+        vs.commands.registerCommand('turbogerrit.initialSetup', initialSetup);
+    const openDiffCommand =
+        vs.commands.registerCommand('turbogerrit.openDiff', (node: GerritFileItem) => { openDiff(node, memFs); });
+    const openUrlCommand = vs.commands.registerCommand('turbogerrit.openGerritUrl', openUrl);
+
+    const myScheme = 'turbodiff';
+    const myProvider = new (class implements vs.TextDocumentContentProvider {
+        provideTextDocumentContent(uri: vs.Uri): string {
+            return `${uri.path}`;
+        }
+    })();
+
+
+    const refreshCommand = vs.commands.registerCommand('turbogerrit.refresh', () => { gerritDataProvider.refresh(); });
+    const gitReviewVerifiedCommand = vs.commands.registerCommand('turbogerrit.gitReview+1', gitReviewVerified);
+    const gitReviewReviewedCommand = vs.commands.registerCommand('turbogerrit.gitReview+2', gitReviewReviewed);
+    const gitReviewSubmitCommand = vs.commands.registerCommand('turbogerrit.gitReviewSubmit', gitReviewSubmit);
+
+    context.subscriptions.push(vs.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
+    context.subscriptions.push(vs.workspace.registerTextDocumentContentProvider(myScheme, myProvider));
+    context.subscriptions.push(treeView);
+    context.subscriptions.push(pushToGerritCommand);
+    context.subscriptions.push(initialSetupCommand);
+    context.subscriptions.push(openUrlCommand);
+    context.subscriptions.push(openDiffCommand);
+    context.subscriptions.push(gitReviewVerifiedCommand);
+    context.subscriptions.push(gitReviewReviewedCommand);
+    context.subscriptions.push(gitReviewSubmitCommand);
+    context.subscriptions.push(refreshCommand);
+
 }
 
 async function initialSetup() {
-	const config = new ExtensionConfig();
-	await config.setUsername();
+    const config = new ExtensionConfig();
+    await config.setUsername();
+    await config.setEmail();
 }
 
 async function pushToGerrit() {
-	let config: ExtensionConfig = new ExtensionConfig();
-	const gitReview = config.parseGitReviewFile();
-	const username = config.getUsername();
-	const hasCommits = config.hasCommits;
-	const currentBranch = config.currentBranch;
-	const cwd = config.cwd;
-	if (username === null) {
-		vs.window.showInformationMessage('TurboGerrit: I dont know your username. Do you want to set username in settings?',
-			'Sure').then(async (selected) => {
-				if (selected === undefined) return;
-				await config.setUsername();
-				return;
-			});
-		return;
-	}
-	if (gitReview === null) {
-		vs.window.showInformationMessage('TurboGerrit: I cant find your .gitreview file. Do you want to set path in settings?',
-			'Sure').then(async (selected) => {
-				if (selected === undefined) return;
-				await config.setGitReviewPath();
-				return;
-			});
-		return;
-	}
-	if (cwd === null || currentBranch === null) {
-		log.vsE("Open workspace, or wait until it's initialization.");
-		return;
-	}
-	if (hasCommits === null) {
-		log.vsE('Nothing to commit. Hack some code, then call this command again.');
-		return;
-	}
-
-	const command = `cd ${cwd} && git push ssh://${username}@${gitReview.host}:${gitReview.port}/${gitReview.project} HEAD:refs/for/${currentBranch}${config.reviewersAttribute}`;
-	log.i('Executing:');
-	log.i(command);
-	await vs.window.withProgress({
-		location: vs.ProgressLocation.Notification,
-		title: `Pushing to refs/for/${currentBranch}`,
-	}, () => {
-		return new Promise<void>(async resolve => {
-			cp.exec(command,
-				(err, stdout, stderr) => {
-					onPushExecuted(err, stdout, stderr, currentBranch);
-					resolve();
-				});
-		});
-	});
+    let config = new ExtensionConfig().prepare(log);
+    if (config === null) {
+        return;
+    }
+    const command = `cd ${config.cwd} && git push ssh://${config.username}@${config.gitReview.host}:${config.gitReview.port}/${config.gitReview.project} HEAD:refs/for/${config.currentBranch}${config.reviewersAttribute}`;
+    log.i('Executing:');
+    log.i(command);
+    await vs.window.withProgress({
+        location: vs.ProgressLocation.Notification,
+        title: `Pushing to refs/for/${config.currentBranch}`,
+    }, () => {
+        return new Promise<void>(async resolve => {
+            cp.exec(command,
+                (err, stdout, stderr) => {
+                    onPushExecuted(err, stdout, stderr, config.currentBranch);
+                    resolve();
+                });
+        });
+    });
 
 }
 
 function onPushExecuted(err: cp.ExecException | null, stdout: string, stderr: string, currentBranch: string) {
-	log.logCpContent(err, stdout, stderr);
-	let exitCode = err?.code;
-	if (stderr?.includes('Could not resolve hostname')) {
-		log.vsE('Could not connect to Gerrit. Maybe you forgot to turn on the VPN?');
-		return;
-	}
-	if (stderr?.includes('no new changes')) {
-		log.vsE('Rejected from remote, nothing to push.');
-		return;
-	}
-	if (exitCode === undefined) {
-		log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
-		return;
-	}
-	switch (exitCode) {
-		case 0:
-			log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
-			return;
-		case 127:
-		case 9009:
-			log.vsE('"ssh" is not installed');
-			return;
-		default:
-			log.vsE('Something went wrong, see Output > TurboGerrit for more info...');
-			return;
-	}
+    log.logCpContent(err, stdout, stderr);
+    let exitCode = err?.code;
+    if (stderr?.includes('Could not resolve hostname')) {
+        log.vsE('Could not connect to Gerrit. Maybe you forgot to turn on the VPN?');
+        return;
+    }
+    if (stderr?.includes('no new changes')) {
+        log.vsE('Rejected from remote, nothing to push.');
+        return;
+    }
+    if (exitCode === undefined) {
+        log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
+        return;
+    }
+    switch (exitCode) {
+        case 0:
+            log.vsI(`Sucsessfully pushed to refs/for/${currentBranch}`);
+            return;
+        case 127:
+        case 9009:
+            log.vsE('"ssh" is not installed');
+            return;
+        default:
+            log.vsE('Something went wrong, see Output > TurboGerrit for more info...');
+            return;
+    }
+}
+
+async function openDiff(node: GerritFileItem, memFs: MemFS) {
+    const c = new ExtensionConfig().prepare(log);
+    if (!c) {
+        log.vsE('Can\'t launch "open diff", workspace is not ready yet. Try again in a minute');
+        return;
+    }
+
+    try {
+        const originalContent = await new Promise<string>((resolve, reject) => {
+            cp.exec(`cd ${c.cwd} && git show ${node.revision}^:${node.fileName}`, (error, stdout) => {
+                if (error) {
+                    log.e(`Failed to fetch original diff data: ${error.message}`);
+                    reject(error);
+                } else {
+                    resolve(stdout);
+                }
+            });
+        });
+
+        const modifiedContent = await new Promise<string>((resolve, reject) => {
+            cp.exec(`cd ${c.cwd} && git show ${node.revision}:${node.fileName}`, (error, stdout) => {
+                if (error) {
+                    log.e(`Failed to fetch modified diff data: ${error.message}`);
+                    reject(error);
+                } else {
+                    resolve(stdout);
+                }
+            });
+        });
+
+        const orig = vs.Uri.parse(`memfs:/original.${node.fileExt}`);
+        const mod = vs.Uri.parse(`memfs:/modified.${node.fileExt}`);
+        memFs.writeFile(orig, Buffer.from(originalContent), {
+            create: true,
+            overwrite: true,
+        });
+        memFs.writeFile(mod, Buffer.from(modifiedContent), {
+            create: true,
+            overwrite: true,
+        });
+
+        await vs.commands.executeCommand('vscode.diff', orig, mod, `diff for ${node.fileName}`);
+
+    } catch (error) {
+        log.vsE(`Error during "diff" operation: ${error}`);
+    }
+}
+
+async function openUrl(node: GerritURLItem) {
+    const url = node.url;
+    if (url === undefined || url === null) {
+        log.vsE('Cannot open url: ${url}');
+        return;
+    }
+    vs.env.openExternal(vs.Uri.parse(url));
+}
+
+
+async function gitReviewVerified(node: GerritReplyItem) {
+    const c = new ExtensionConfig().prepare(log);
+    if (!c) {
+        log.vsE('Can\'t launch "review +1", workspace is not ready yet. Try again in a minute');
+        return;
+    }
+    try {
+        await new Promise<string>((resolve, reject) => {
+            let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +1 ${node.commitId},${node.patchSet}`;
+            log.i(`Executing: ${command}`);
+            cp.exec(command, (error, stdout) => {
+                if (error) {
+                    log.e(`Failed to fetch original diff data: ${error.message}`);
+                    reject(error);
+                } else {
+                    log.vsI('Successfully reviewed (+1)!');
+                    resolve(stdout);
+                }
+            });
+        });
+    } catch (error) {
+        log.vsE(`Error during "review +1" operation: ${error}`);
+    }
+}
+async function gitReviewReviewed(node: GerritReplyItem) {
+    const c = new ExtensionConfig().prepare(log);
+    if (!c) {
+        log.vsE('Can\'t launch "review +2", workspace is not ready yet. Try again in a minute');
+        return;
+    }
+    try {
+        await new Promise<string>((resolve, reject) => {
+            let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +2 ${node.commitId},${node.patchSet}`;
+            log.i(`Executing: ${command}`);
+            cp.exec(command, (error, stdout) => {
+                if (error) {
+                    log.e(`Failed to fetch original diff data: ${error.message}`);
+                    reject(error);
+                } else {
+                    log.vsI('Successfully reviewed (+2)!');
+                    resolve(stdout);
+                }
+            });
+        });
+    } catch (error) {
+        log.vsE(`Error during "review +2" operation: ${error}`);
+    }
+}
+async function gitReviewSubmit(node: GerritReplyItem) {
+    const c = new ExtensionConfig().prepare(log);
+    if (!c) {
+        log.vsE('Can\'t launch "submit", workspace is not ready yet. Try again in a minute');
+        return;
+    }
+    try {
+        await new Promise<string>((resolve, reject) => {
+            let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --submit +2 ${node.commitId},${node.patchSet}`;
+            log.i(`Executing: ${command}`);
+            cp.exec(command, (error, stdout) => {
+                if (error) {
+                    log.e(`Failed to fetch original diff data: ${error.message}`);
+                    reject(error);
+                } else {
+                    log.vsI('Successfully submitted!');
+                    resolve(stdout);
+                }
+            });
+        });
+    } catch (error) {
+        log.vsE(`Error during "submit" operation: ${error}`);
+    }
 }
 
 exports = {
-	activate,
-	deactivate,
+    activate,
+    deactivate,
 };

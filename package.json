@@ -2,7 +2,7 @@
   "name": "turbogerrit",
   "displayName": "turbogerrit",
   "description": "SSH-only client for Gerrit Code Review",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "repository": "https://github.com/leredirect/vscode_turbogerrit",
   "engines": {
     "vscode": "^1.96.0"
@@ -18,7 +18,47 @@
     "commands": [
       {
         "command": "turbogerrit.pushToGerrit",
-        "title": "Push to Gerrit"
+        "title": "Push to Gerrit",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.initialSetup",
+        "title": "Initial setup",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.openGerritUrl",
+        "title": "Open url",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.openDiff",
+        "title": "Open diff",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.gitReview+1",
+        "title": "+1",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.gitReview+2",
+        "title": "+2",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.gitReviewSubmit",
+        "title": "Submit",
+        "category": "TurboGerrit"
+      },
+      {
+        "command": "turbogerrit.refresh",
+        "title": "Refresh incoming reviews",
+        "category": "TurboGerrit",
+        "icon": {
+          "light": "resources/refresh.svg",
+          "dark": "resources/refresh_dark.svg"
+        }
       }
     ],
     "menus": {
@@ -26,6 +66,48 @@
         {
           "command": "turbogerrit.pushToGerrit",
           "group": "TurboGerrit"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "turbogerrit.refresh",
+          "when": "view == turbogerrit.scmView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "turbogerrit.openGerritUrl",
+          "when": "view == turbogerrit.scmView && viewItem == url",
+          "group": "inline"
+        },
+        {
+          "command": "turbogerrit.openDiff",
+          "when": "view == turbogerrit.scmView && viewItem == diff",
+          "group": "inline"
+        },
+        {
+          "command": "turbogerrit.gitReview+1",
+          "when": "view == turbogerrit.scmView && viewItem == reply",
+          "group": "inline"
+        },
+        {
+          "command": "turbogerrit.gitReview+2",
+          "when": "view == turbogerrit.scmView && viewItem == reply",
+          "group": "inline"
+        },
+        {
+          "command": "turbogerrit.gitReviewSubmit",
+          "when": "view == turbogerrit.scmView && viewItem == reply",
+          "group": "inline"
+        }
+      ]
+    },
+    "views": {
+      "scm": [
+        {
+          "id": "turbogerrit.scmView",
+          "name": "TurboGerrit"
         }
       ]
     },
@@ -52,6 +134,13 @@
             "null"
           ],
           "description": "Gerrit Code Review username"
+        },
+        "turbogerrit.email": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Gerrit Code Review email"
         }
       }
     }
@@ -67,6 +156,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/node-fetch": "^2.6.12",
     "@types/ssh2": "^1.15.3",
     "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
@@ -77,6 +167,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "node-fetch": "^2.7.0",
     "node-ssh": "^13.2.0"
   }
 }

@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.0.5]
+
+- Separate view in SCM panel, provides commits assigned to email (set in config or with initial setup command), diff for changed files, review and open gerrit webview url
+
 ## [0.0.4]
 
 - global config prioritized for username

@@ -2,6 +2,7 @@ import * as vs from 'vscode';
 import { API, GitExtension } from '../external/git';
 import path from 'path';
 import fs from 'fs';
+import { Log } from './log';
 
 export class ExtensionConfig {
     constructor() { }
@@ -10,6 +11,71 @@ export class ExtensionConfig {
 
     private workspace = vs.workspace;
     private config: vs.WorkspaceConfiguration = this.workspace.getConfiguration(this.extensionKey);
+
+    prepare(log: Log): {
+        username: string,
+        hasCommits: boolean,
+        currentBranch: string,
+        cwd: string,
+        gitReview: {
+            port: number;
+            host: string;
+            project: string;
+        },
+        email: string,
+        reviewersAttribute: string,
+    } | null {
+        const gitReview = this.parseGitReviewFile();
+        const username = this.getUsername();
+        const email = this.getEmail();
+        const hasCommits = this.hasCommits;
+        const currentBranch = this.currentBranch;
+        const cwd = this.cwd;
+        if (username === null) {
+            vs.window.showInformationMessage('TurboGerrit: I dont know your username. Do you want to set username in settings?',
+                'Sure').then(async (selected) => {
+                    if (selected === undefined) return;
+                    await this.setUsername();
+                    return;
+                });
+            return null;
+        }
+        if (email === null) {
+            vs.window.showInformationMessage('TurboGerrit: I dont know your email. Do you want to set email in settings?',
+                'Sure').then(async (selected) => {
+                    if (selected === undefined) return;
+                    await this.setEmail();
+                    return;
+                });
+            return null;
+        }
+        if (gitReview === null) {
+            vs.window.showInformationMessage('TurboGerrit: I cant find your .gitreview file. Do you want to set path in settings?',
+                'Sure').then(async (selected) => {
+                    if (selected === undefined) return;
+                    await this.setGitReviewPath();
+                    return;
+                });
+            return null;
+        }
+        if (cwd === null || currentBranch === null) {
+            log.vsE("Open workspace, or wait until it's initialization.");
+            return null;
+        }
+        if (hasCommits === null) {
+            log.vsE('Nothing to commit. Hack some code, then call this command again.');
+            return null;
+        }
+        return {
+            username: username,
+            hasCommits: hasCommits !== 0,
+            currentBranch: currentBranch,
+            cwd: cwd,
+            gitReview: gitReview,
+            email: email,
+            reviewersAttribute: this.reviewersAttribute,
+        };
+    }
 
     // reviewers config
     get reviewersAttribute() {
@@ -64,15 +130,15 @@ export class ExtensionConfig {
     private usernameKey: string = 'username';
     async setUsername() {
         const usernameInput = await vs.window.showInputBox({
-            title: "Gerrit Code Review email:"
+            title: "Gerrit Code Review username:"
         }) ?? null;
         await this.config.update(this.usernameKey, usernameInput, 1);
     }
 
     getUsername(): string | null {
-        let reviwers = this.config.get<string>(this.usernameKey);
-        if (reviwers === undefined || reviwers.length === 0) return null;
-        return reviwers;
+        let username = this.config.get<string>(this.usernameKey);
+        if (username === undefined || username.length === 0) return null;
+        return username;
     }
 
     // gitreview file
@@ -82,21 +148,21 @@ export class ExtensionConfig {
             canSelectFolders: false,
             canSelectMany: false,
         });
-    
+
         if (!gitReviewPaths || gitReviewPaths.length === 0) return;
-    
+
         const gitReviewPath = gitReviewPaths[0].fsPath;
         await this.config.update(this.gitreviewPathKey, gitReviewPath);
     }
     private getGitReviewFileAsString() {
         const maybeCustomPath = this.config.get<string>(this.gitreviewPathKey);
-    
-        const gitReviewPath = (maybeCustomPath && maybeCustomPath !== '') 
-            ? maybeCustomPath 
+
+        const gitReviewPath = (maybeCustomPath && maybeCustomPath !== '')
+            ? maybeCustomPath
             : this.workspace.workspaceFolders?.map(folder =>
                 path.join(folder.uri.fsPath, '.gitreview')
             ).find(fs.existsSync);
-    
+
         return gitReviewPath ? fs.readFileSync(gitReviewPath, 'utf8') : null;
     }
     parseGitReviewFile(): { port: number; host: string; project: string } | null {
@@ -130,4 +196,18 @@ export class ExtensionConfig {
         return null;
     }
 
+    // email
+    private emailKey: string = 'email';
+    async setEmail() {
+        const emailInput = await vs.window.showInputBox({
+            title: "Gerrit Code Review email:"
+        }) ?? null;
+        await this.config.update(this.emailKey, emailInput, 1);
+    }
+
+    getEmail(): string | null {
+        let email = this.config.get<string>(this.emailKey);
+        if (email === undefined || email.length === 0) return null;
+        return email;
+    }
 }

@@ -2,11 +2,12 @@
 
 ## Features
 
-Provides Push to Gerrit command based on ssh.
+Gerrit Code Review dashboard for VSCode. Supports push to review, inspecting 
+changes and reply (+1, +2 and Submit commands).
 
 ## Requirements
 
-ssh utility installed
+ssh, git utilities installed.
 
 ## Extension Settings
 
@@ -15,10 +16,11 @@ This extension contributes the following settings:
 * `turbogerrit.reviewers`: predefined list of reviewers emails.
 * `turbogerrit.username`: Gerrit Code Review username.
 * `turbogerrit.gitreviewPath`: Custom path to .gitreview file.
+* `turbogerrit.email`: Email for filter reviews.
 
 ## Release Notes
-
-Users appreciate release notes as you update your extension.
+### 0.0.5
+- Separate view in SCM panel, provides commits assigned to email (set in config or with initial setup command), diff for changed files, review and open gerrit webview url
 
 ### 0.0.4
 - global config prioritized for username
