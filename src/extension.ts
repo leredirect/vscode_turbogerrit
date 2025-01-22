@@ -1,9 +1,13 @@
 import * as vs from 'vscode';
 import cp, { exec } from 'child_process';
+import { ExtensionConfig } from './config/extension_config';
+import { GerritDataProvider } from './treeview/gerrit_data_provider';
+import { GerritFileItem } from './treeview/items/gerrit_file_item';
+import { GerritReplyItem } from './treeview/items/gerrit_reply_item';
+import { GerritURLItem } from './treeview/items/gerrit_url_item';
+import { GerritReviewFilter } from './treeview/gerrit_review_filter';
+import { MemFS } from './external/fs';
 import { Log } from './class/log';
-import { ExtensionConfig } from './class/extension_config';
-import { GerritDataProvider, GerritFileItem, GerritReplyItem, GerritReviewItem, GerritURLItem } from './class/treeview';
-import { MemFS } from './class/fs';
 
 const log = new Log();
 export async function activate(context: vs.ExtensionContext) {
@@ -18,7 +22,6 @@ async function registerCommands(context: vs.ExtensionContext) {
     const treeView = vs.window.createTreeView('turbogerrit.scmView', {
         treeDataProvider: gerritDataProvider,
     });
-
 
     const pushToGerritCommand =
         vs.commands.registerCommand('turbogerrit.pushToGerrit', pushToGerrit);
@@ -36,10 +39,14 @@ async function registerCommands(context: vs.ExtensionContext) {
     })();
 
 
-    const refreshCommand = vs.commands.registerCommand('turbogerrit.refresh', () => { gerritDataProvider.refresh(); });
+    const refreshCommand = vs.commands.registerCommand('turbogerrit.refresh', async () => {
+        await gerritDataProvider.refresh();
+
+    });
     const gitReviewVerifiedCommand = vs.commands.registerCommand('turbogerrit.gitReview+1', gitReviewVerified);
     const gitReviewReviewedCommand = vs.commands.registerCommand('turbogerrit.gitReview+2', gitReviewReviewed);
     const gitReviewSubmitCommand = vs.commands.registerCommand('turbogerrit.gitReviewSubmit', gitReviewSubmit);
+    const createBranchCommand = vs.commands.registerCommand('turbogerrit.createBranch', createBranch);
 
     context.subscriptions.push(vs.workspace.registerFileSystemProvider('memfs', memFs, { isCaseSensitive: true }));
     context.subscriptions.push(vs.workspace.registerTextDocumentContentProvider(myScheme, myProvider));
@@ -52,6 +59,7 @@ async function registerCommands(context: vs.ExtensionContext) {
     context.subscriptions.push(gitReviewReviewedCommand);
     context.subscriptions.push(gitReviewSubmitCommand);
     context.subscriptions.push(refreshCommand);
+    context.subscriptions.push(createBranchCommand);
 
 }
 
@@ -242,6 +250,55 @@ async function gitReviewSubmit(node: GerritReplyItem) {
     } catch (error) {
         log.vsE(`Error during "submit" operation: ${error}`);
     }
+}
+
+async function createBranch() {
+    const c = new ExtensionConfig().prepare(log);
+    if (c === null) {
+        log.vsE('Can\'t launch "create branch", workspace is not ready yet. Try again in a minute');
+        return;
+    }
+
+    let newBranchName = await vs.window.showInputBox({
+        title: 'Enter branch name:',
+    });
+
+    if (!newBranchName) {
+        log.vsE('Can\'t proceed with "create branch": empty branch name');
+        return;
+    }
+
+    let newBranchRevision = await vs.window.showInputBox({
+        title: 'Enter revision (just hit "Enter" to create branch from master):',
+        placeHolder: 'master',
+    });
+
+    if (!newBranchRevision) {
+        newBranchRevision = 'master';
+    }
+    cp.exec(`ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit create-branch ${c.gitReview.project} ${newBranchName} ${newBranchRevision}`, (err, stdout) => {
+        if (err) {
+            if (err.message.includes('Could not resolve hostname')) {
+                log.vsE(`Failed to create ${newBranchName}: Can't connect to remote.`);
+            } else {
+                log.vsE(`Failed to create ${newBranchName}: ${err.message}`);
+            }
+        } else {
+            vs.window.showInformationMessage(`Successfully created ${newBranchName}! Do you want to checkout ${newBranchName}?`, 'Sure!').then(async (selected) => {
+                if (selected === "Sure!") {
+                    cp.exec(`cd ${c.cwd} && git fetch && git checkout ${newBranchName}`, (err, stdout) => {
+                        if (err) {
+                            log.vsE(`Failed to checkout ${newBranchName}: ${err.message}`);
+                            return;
+                        } else {
+                            log.vsI(`Successfully checked out ${newBranchName}!`);
+                            return;
+                        }
+                    });
+                }
+            });
+        }
+    });
 }
 
 exports = {

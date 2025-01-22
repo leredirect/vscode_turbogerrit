@@ -1,8 +1,10 @@
+import fs from 'fs';
+import path from 'path';
 import * as vs from 'vscode';
 import { API, GitExtension } from '../external/git';
-import path from 'path';
-import fs from 'fs';
-import { Log } from './log';
+import { ExtensionConfigData } from './extension_config_data';
+import { Log } from '../class/log';
+
 
 export class ExtensionConfig {
     constructor() { }
@@ -12,25 +14,14 @@ export class ExtensionConfig {
     private workspace = vs.workspace;
     private config: vs.WorkspaceConfiguration = this.workspace.getConfiguration(this.extensionKey);
 
-    prepare(log: Log): {
-        username: string,
-        hasCommits: boolean,
-        currentBranch: string,
-        cwd: string,
-        gitReview: {
-            port: number;
-            host: string;
-            project: string;
-        },
-        email: string,
-        reviewersAttribute: string,
-    } | null {
+    prepare(log: Log): ExtensionConfigData | null {
         const gitReview = this.parseGitReviewFile();
         const username = this.getUsername();
         const email = this.getEmail();
         const hasCommits = this.hasCommits;
         const currentBranch = this.currentBranch;
         const cwd = this.cwd;
+        const gitRepo = this.gitRepo;
         if (username === null) {
             vs.window.showInformationMessage('TurboGerrit: I dont know your username. Do you want to set username in settings?',
                 'Sure').then(async (selected) => {
@@ -66,6 +57,10 @@ export class ExtensionConfig {
             log.vsE('Nothing to commit. Hack some code, then call this command again.');
             return null;
         }
+        if (gitRepo === null) {
+            log.vsE("Open workspace, or wait until it's initialization.");
+            return null;
+        }
         return {
             username: username,
             hasCommits: hasCommits !== 0,
@@ -74,6 +69,7 @@ export class ExtensionConfig {
             gitReview: gitReview,
             email: email,
             reviewersAttribute: this.reviewersAttribute,
+            repository: gitRepo,
         };
     }
 
@@ -104,13 +100,18 @@ export class ExtensionConfig {
         return head.ahead;
     }
     private get head() {
-        const config = this.getScmGitApiCore();
-        if (config === null) return null;
-        const repository = config.repositories[0];
+        const repository = this.gitRepo;
         if (repository === undefined || repository === null) return null;
         const head = repository.state.HEAD;
         if (head === undefined) return null;
         return head;
+    }
+    get gitRepo() {
+        const config = this.getScmGitApiCore();
+        if (config === null) return null;
+        const repository = config.repositories[0];
+        if (repository === undefined || repository === null) return null;
+        return repository;
     }
     private getScmGitApiCore(): API | null {
         const extension = vs.extensions.getExtension<GitExtension>('vscode.git');
@@ -159,13 +160,12 @@ export class ExtensionConfig {
 
         const gitReviewPath = (maybeCustomPath && maybeCustomPath !== '')
             ? maybeCustomPath
-            : this.workspace.workspaceFolders?.map(folder =>
-                path.join(folder.uri.fsPath, '.gitreview')
+            : this.workspace.workspaceFolders?.map(folder => path.join(folder.uri.fsPath, '.gitreview')
             ).find(fs.existsSync);
 
         return gitReviewPath ? fs.readFileSync(gitReviewPath, 'utf8') : null;
     }
-    parseGitReviewFile(): { port: number; host: string; project: string } | null {
+    parseGitReviewFile(): { port: number; host: string; project: string; } | null {
         const review = this.getGitReviewFileAsString();
         if (!review) return null;
 

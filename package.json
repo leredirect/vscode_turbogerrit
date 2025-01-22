@@ -2,7 +2,7 @@
   "name": "turbogerrit",
   "displayName": "turbogerrit",
   "description": "SSH-only client for Gerrit Code Review",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "repository": "https://github.com/leredirect/vscode_turbogerrit",
   "engines": {
     "vscode": "^1.96.0"
@@ -18,7 +18,7 @@
     "commands": [
       {
         "command": "turbogerrit.pushToGerrit",
-        "title": "Push to Gerrit",
+        "title": "(TurboGerrit) Push to Gerrit",
         "category": "TurboGerrit"
       },
       {
@@ -52,6 +52,11 @@
         "category": "TurboGerrit"
       },
       {
+        "command": "turbogerrit.createBranch",
+        "title": "(TurboGerrit) Create remote branch",
+        "category": "TurboGerrit"
+      },
+      {
         "command": "turbogerrit.refresh",
         "title": "Refresh incoming reviews",
         "category": "TurboGerrit",
@@ -65,6 +70,10 @@
       "scm/title": [
         {
           "command": "turbogerrit.pushToGerrit",
+          "group": "TurboGerrit"
+        }, 
+        {
+          "command": "turbogerrit.createBranch",
           "group": "TurboGerrit"
         }
       ],
