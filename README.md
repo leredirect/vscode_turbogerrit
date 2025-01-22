@@ -19,6 +19,11 @@ This extension contributes the following settings:
 * `turbogerrit.email`: Email for filter reviews.
 
 ## Release Notes
+
+## 0.0.6
+- Separate trees for incoming and outcoming reviews, bugdixing and small 
+refactoring in sourcecode
+
 ### 0.0.5
 - Separate view in SCM panel, provides commits assigned to email (set in config or with initial setup command), diff for changed files, review and open gerrit webview url
 

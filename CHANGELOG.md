@@ -2,7 +2,8 @@
 
 ## [0.0.6]
 
-- Separate view in SCM panel, provides commits assigned to email (set in config or with initial setup command), diff for changed files, review and open gerrit webview url
+- Separate trees for incoming and outcoming reviews, bugdixing and small 
+refactoring in sourcecode
 
 ## [0.0.5]
 
