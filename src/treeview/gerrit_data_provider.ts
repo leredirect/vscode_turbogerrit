@@ -110,14 +110,17 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
                 new GerritSectionItem(outgoingResults.length === 0 ? [new GerritEmptyItem(GerritReviewFilter.outgoing)] : outgoingResults, GerritReviewFilter.outgoing),
             ];
             if (incomingResults.length !== 0) {
-                vs.window.setStatusBarMessage(`Review requested (${this.items.length}) `);
+                vs.window.setStatusBarMessage(`TurboGerrit: (${this.items.length}) `);
             } else {
-                vs.window.setStatusBarMessage('');
+                vs.window.setStatusBarMessage('TurboGerrit: (0)');
             }
+            vs.commands.executeCommand('turbogerrit.mangeNotification',
+                incomingResults,
+            );
         } catch (err) {
             if (err instanceof Error) {
                 if (err.message.includes('Could not resolve hostname')) {
-                    vs.window.setStatusBarMessage('Gerrit fetch failed');
+                    vs.window.setStatusBarMessage('TurboGerrit: Fetch failed');
                     this.log.e(`Failed to fetch Gerrit data: ${err.message}`);
                     this.items = [new GerritErrorItem('No connection (WI-FI or VPN?)')];
                 } else {

@@ -20,6 +20,6 @@ export class GerritSectionItem extends GerritTreeItem {
         public children: GerritTreeItem[] = [],
         filter: GerritReviewFilter,
     ) {
-        super(filter === GerritReviewFilter.incoming ? `Incoming reviews` : 'Outgoing reviews', vs.TreeItemCollapsibleState.Collapsed);
+        super(filter === GerritReviewFilter.incoming ? `Incoming reviews` : 'Outgoing reviews', children.length !== 0 && children[0] instanceof GerritReviewItem ? vs.TreeItemCollapsibleState.Expanded : vs.TreeItemCollapsibleState.Collapsed);
     }
 }

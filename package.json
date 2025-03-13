@@ -2,7 +2,7 @@
   "name": "turbogerrit",
   "displayName": "turbogerrit",
   "description": "SSH-only client for Gerrit Code Review",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "repository": "https://github.com/leredirect/vscode_turbogerrit",
   "engines": {
     "vscode": "^1.96.0"
@@ -58,7 +58,7 @@
       },
       {
         "command": "turbogerrit.refresh",
-        "title": "Refresh incoming reviews",
+        "title": "Refresh reviews",
         "category": "TurboGerrit",
         "icon": {
           "light": "resources/refresh.svg",

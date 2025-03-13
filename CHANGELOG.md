@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.0.7]
+- Basic notifications (WIP)
+
 ## [0.0.6]
 
 - Separate trees for incoming and outcoming reviews, bugdixing and small 

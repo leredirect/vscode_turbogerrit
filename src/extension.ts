@@ -1,13 +1,13 @@
 import * as vs from 'vscode';
-import cp, { exec } from 'child_process';
+import cp from 'child_process';
 import { ExtensionConfig } from './config/extension_config';
 import { GerritDataProvider } from './treeview/gerrit_data_provider';
 import { GerritFileItem } from './treeview/items/gerrit_file_item';
 import { GerritReplyItem } from './treeview/items/gerrit_reply_item';
 import { GerritURLItem } from './treeview/items/gerrit_url_item';
-import { GerritReviewFilter } from './treeview/gerrit_review_filter';
 import { MemFS } from './external/fs';
 import { Log } from './class/log';
+import { GerritReviewItem } from './treeview/items/gerrit_review_item';
 
 const log = new Log();
 export async function activate(context: vs.ExtensionContext) {
@@ -30,6 +30,7 @@ async function registerCommands(context: vs.ExtensionContext) {
     const openDiffCommand =
         vs.commands.registerCommand('turbogerrit.openDiff', (node: GerritFileItem) => { openDiff(node, memFs); });
     const openUrlCommand = vs.commands.registerCommand('turbogerrit.openGerritUrl', openUrl);
+    const mangeNotificationCommand = vs.commands.registerCommand('turbogerrit.mangeNotification', (node: GerritReviewItem[]) => { manageNotification(node, context); });
 
     const myScheme = 'turbodiff';
     const myProvider = new (class implements vs.TextDocumentContentProvider {
@@ -60,6 +61,7 @@ async function registerCommands(context: vs.ExtensionContext) {
     context.subscriptions.push(gitReviewSubmitCommand);
     context.subscriptions.push(refreshCommand);
     context.subscriptions.push(createBranchCommand);
+    context.subscriptions.push(mangeNotificationCommand);
 
 }
 
@@ -299,6 +301,35 @@ async function createBranch() {
             });
         }
     });
+}
+
+const seenStorageKey = 'turbogerritSeenReviews';
+
+async function manageNotification(node: GerritReviewItem[], context: vs.ExtensionContext) {
+
+    if (node.length === 0) {
+        if (context.workspaceState.get(seenStorageKey)) {
+            context.workspaceState.update(seenStorageKey, undefined);
+        }
+        return;
+    }
+    const stored = context.workspaceState.get<number[]>(seenStorageKey);
+    const seen = [];
+    for (const item of node) {
+        if (stored?.includes(item.data.id)) {
+            continue;
+        } else {
+            seen.push(item.data.id);
+        }
+    }
+    if (seen.length !== 0) {
+        vs.window.showInformationMessage(`TurboGerrit: Review requested`, 'View', 'Hide').then((selected) => {
+            switch (selected) {
+                case 'View': vs.commands.executeCommand('turbogerrit.scmView.focus');
+            }
+        });
+        context.workspaceState.update(seenStorageKey, seen);
+    }
 }
 
 exports = {
