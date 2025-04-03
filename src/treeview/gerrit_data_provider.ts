@@ -40,10 +40,13 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
         }, 5000);
     }
 
-    async refresh(): Promise<void> {
-        this.items = [new GerritLoadingItem()];
-        this._onDidChangeTreeData.fire();
-        await this.fetchGerritData();
+    async refresh(force: boolean = false): Promise<void> {
+        const hasExpandedItems = this.items.some(item => item.collapsibleState === 2 );
+        if (!hasExpandedItems || force) { 
+            this.items = [new GerritLoadingItem()];
+            this._onDidChangeTreeData.fire();
+            await this.fetchGerritData();
+        }
     }
 
     getTreeItem(element: GerritTreeItem): vs.TreeItem {
@@ -64,7 +67,7 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
                 new GerritReviewDetailItem('Branch', element.data.branch),
                 new GerritReviewDetailItem('Commit Message', element.data.commitMsg),
                 new GerritURLItem(element.data.url),
-                new GerritDiffItem(element.data.revision, element.data.id, element.data.patchSet),
+                new GerritDiffItem(element.data.revision, element.data.ref, element.data.id, element.data.patchSet),
                 new GerritReplyItem(element.data.id, element.data.patchSet),
             ];
         }
@@ -74,7 +77,7 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
                 return element.children;
             }
 
-            this.fetchDiffData(element.revision, element.patchSet).then((children) => {
+            this.fetchDiffData(element.revision, element.reference).then((children) => {
                 element.children = children;
                 this._onDidChangeTreeData.fire(element);
             });
@@ -167,7 +170,7 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
                         id: result.number || -1,
                         patchSet: result.patchSets.length || -1,
                         ref: result.patchSets[result.patchSets.length - 1].ref || 'No ref',
-                        revision: result.patchSets[result.patchSets.length - 1].revision || 'No revision'
+                        revision: result.patchSets[result.patchSets.length - 1].revision || 'No revision',
                     },
                     result.subject,
                 )
@@ -175,7 +178,7 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
         return items;
     }
 
-    private async fetchDiffData(revision: string, patchSet: number): Promise<GerritFileItem[]> {
+    private async fetchDiffData(revision: string, ref: string): Promise<GerritFileItem[]> {
         return new Promise(async (resolve, reject) => {
             const c = new ExtensionConfig().prepare(this.log);
             if (!c) {
@@ -183,7 +186,7 @@ export class GerritDataProvider implements vs.TreeDataProvider<GerritTreeItem> {
                 return;
             }
 
-            const command = `cd ${c.cwd} && git show --name-status ${revision} --format=""`;
+            const command = `cd ${c.cwd} && git fetch origin ${ref} && git diff --name-status ${revision}^!`;
             this.log.i(`Executing: ${command}`);
 
             cp.exec(command, (error, stdout) => {

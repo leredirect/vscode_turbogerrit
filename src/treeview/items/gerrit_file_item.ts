@@ -12,22 +12,21 @@ export class GerritFileItem extends GerritTreeItem {
     ) {
         super(fileName, vs.TreeItemCollapsibleState.None);
         const iconLight = (() => {
-            switch (modification) {
-                case 'MM':
-                case 'M': return 'm.svg';
-                case 'A': return 'a.svg';
-                case 'D': return 'd.svg';
-                case 'R': return 'r.svg';
+            switch (true) {
+                case modification.startsWith('M'): return 'm.svg';
+                case modification.startsWith('A'): return 'a.svg';
+                case modification.startsWith('D'): return 'd.svg';
+                case modification.startsWith('R'): return 'r.svg';
                 default: return 'unknown.svg';
             }
         })();
+
         const iconDark = (() => {
-            switch (modification) {
-                case 'MM':
-                case 'M': return 'm_dark.svg';
-                case 'A': return 'a_dark.svg';
-                case 'D': return 'd_dark.svg';
-                case 'R': return 'r_dark.svg';
+            switch (true) {
+                case modification.startsWith('M'): return 'm_dark.svg';
+                case modification.startsWith('A'): return 'a_dark.svg';
+                case modification.startsWith('D'): return 'd_dark.svg';
+                case modification.startsWith('R'): return 'r_dark.svg';
                 default: return 'unknown_dark.svg';
             }
         })();

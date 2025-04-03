@@ -7,6 +7,7 @@ export class GerritDiffItem extends GerritTreeItem {
 
     constructor(
         public readonly revision: string,
+        public readonly reference: string,
         public readonly commitId: number,
         public readonly patchSet: number
     ) {

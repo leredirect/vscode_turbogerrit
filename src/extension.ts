@@ -28,7 +28,12 @@ async function registerCommands(context: vs.ExtensionContext) {
     const initialSetupCommand =
         vs.commands.registerCommand('turbogerrit.initialSetup', initialSetup);
     const openDiffCommand =
-        vs.commands.registerCommand('turbogerrit.openDiff', (node: GerritFileItem) => { openDiff(node, memFs); });
+        vs.commands.registerCommand('turbogerrit.openDiff', (node: GerritFileItem) => {
+            if (node.modification.startsWith('D') || node.modification.startsWith('A')) {
+                return openFile(node, memFs);
+            }
+            openDiff(node, memFs);
+        });
     const openUrlCommand = vs.commands.registerCommand('turbogerrit.openGerritUrl', openUrl);
     const mangeNotificationCommand = vs.commands.registerCommand('turbogerrit.mangeNotification', (node: GerritReviewItem[]) => { manageNotification(node, context); });
 
@@ -41,8 +46,7 @@ async function registerCommands(context: vs.ExtensionContext) {
 
 
     const refreshCommand = vs.commands.registerCommand('turbogerrit.refresh', async () => {
-        await gerritDataProvider.refresh();
-
+        await gerritDataProvider.refresh(true);
     });
     const gitReviewVerifiedCommand = vs.commands.registerCommand('turbogerrit.gitReview+1', gitReviewVerified);
     const gitReviewReviewedCommand = vs.commands.registerCommand('turbogerrit.gitReview+2', gitReviewReviewed);
@@ -123,6 +127,48 @@ function onPushExecuted(err: cp.ExecException | null, stdout: string, stderr: st
     }
 }
 
+async function openFile(node: GerritFileItem, memFs: MemFS) {
+    const c = new ExtensionConfig().prepare(log);
+    if (!c) {
+        log.vsE('Can\'t launch "open diff", workspace is not ready yet. Try again in a minute');
+        return;
+    }
+
+    let isAdding: boolean = node.modification.startsWith('A');
+
+    try {
+        let command = `cd ${c.cwd} && git show ${node.revision}${isAdding ? '' : '^'}:${node.fileName}`;
+
+        const fileContent = await new Promise<string>((resolve, reject) => {
+            cp.exec(command, (error, stdout) => {
+                if (error) {
+                    log.e(`Failed to fetch original diff data: ${error.message}`);
+                    reject(error);
+                } else {
+                    resolve(stdout);
+                }
+            });
+        });
+
+        const orig = vs.Uri.parse(`memfs:/original.${node.fileExt}`);
+        const mod = vs.Uri.parse(`memfs:/modified.${node.fileExt}`);
+
+        memFs.writeFile(orig, Buffer.from(isAdding ? '' : fileContent), {
+            create: true,
+            overwrite: true,
+        });
+
+        memFs.writeFile(mod, Buffer.from(isAdding ? fileContent : ''), {
+            create: true,
+            overwrite: true,
+        });
+
+        await vs.commands.executeCommand('vscode.diff', orig, mod, `diff for ${node.fileName}`);
+    } catch (error) {
+        log.vsE(`Error during "diff" operation: ${error}`);
+    }
+}
+
 async function openDiff(node: GerritFileItem, memFs: MemFS) {
     const c = new ExtensionConfig().prepare(log);
     if (!c) {
@@ -187,20 +233,27 @@ async function gitReviewVerified(node: GerritReplyItem) {
         log.vsE('Can\'t launch "review +1", workspace is not ready yet. Try again in a minute');
         return;
     }
+
     try {
-        await new Promise<string>((resolve, reject) => {
-            let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +1 ${node.commitId},${node.patchSet}`;
-            log.i(`Executing: ${command}`);
-            cp.exec(command, (error, stdout) => {
-                if (error) {
-                    log.e(`Failed to fetch original diff data: ${error.message}`);
-                    reject(error);
-                } else {
-                    log.vsI('Successfully reviewed (+1)!');
-                    resolve(stdout);
-                }
+        await vs.window.withProgress({
+            location: vs.ProgressLocation.Notification,
+            title: `Sending reply (+1)...`,
+        }, () => {
+            return new Promise<string>((resolve, reject) => {
+                let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +1 ${node.commitId},${node.patchSet}`;
+                log.i(`Executing: ${command}`);
+                cp.exec(command, (error, stdout) => {
+                    if (error) {
+                        log.e(`Failed to send reply: ${error.message}`);
+                        reject(error);
+                    } else {
+                        log.vsI('Successfully reviewed (+1)!');
+                        resolve(stdout);
+                    }
+                });
             });
         });
+
     } catch (error) {
         log.vsE(`Error during "review +1" operation: ${error}`);
     }
@@ -212,17 +265,22 @@ async function gitReviewReviewed(node: GerritReplyItem) {
         return;
     }
     try {
-        await new Promise<string>((resolve, reject) => {
-            let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +2 ${node.commitId},${node.patchSet}`;
-            log.i(`Executing: ${command}`);
-            cp.exec(command, (error, stdout) => {
-                if (error) {
-                    log.e(`Failed to fetch original diff data: ${error.message}`);
-                    reject(error);
-                } else {
-                    log.vsI('Successfully reviewed (+2)!');
-                    resolve(stdout);
-                }
+        await vs.window.withProgress({
+            location: vs.ProgressLocation.Notification,
+            title: `Sending reply (+2)...`,
+        }, () => {
+            return new Promise<string>((resolve, reject) => {
+                let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +2 ${node.commitId},${node.patchSet}`;
+                log.i(`Executing: ${command}`);
+                cp.exec(command, (error, stdout) => {
+                    if (error) {
+                        log.e(`Failed to send reply: ${error.message}`);
+                        reject(error);
+                    } else {
+                        log.vsI('Successfully reviewed (+2)!');
+                        resolve(stdout);
+                    }
+                });
             });
         });
     } catch (error) {
@@ -236,17 +294,22 @@ async function gitReviewSubmit(node: GerritReplyItem) {
         return;
     }
     try {
-        await new Promise<string>((resolve, reject) => {
-            let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --submit +2 ${node.commitId},${node.patchSet}`;
-            log.i(`Executing: ${command}`);
-            cp.exec(command, (error, stdout) => {
-                if (error) {
-                    log.e(`Failed to fetch original diff data: ${error.message}`);
-                    reject(error);
-                } else {
-                    log.vsI('Successfully submitted!');
-                    resolve(stdout);
-                }
+        await vs.window.withProgress({
+            location: vs.ProgressLocation.Notification,
+            title: `Sending submission...`,
+        }, () => {
+            return new Promise<string>((resolve, reject) => {
+                let command = `ssh -p ${c.gitReview.port} ${c.username}@${c.gitReview.host} gerrit review --project ${c.gitReview.project} --code-review +2 ${node.commitId},${node.patchSet}`;
+                log.i(`Executing: ${command}`);
+                cp.exec(command, (error, stdout) => {
+                    if (error) {
+                        log.e(`Failed to send reply: ${error.message}`);
+                        reject(error);
+                    } else {
+                        log.vsI('Successfully submitted!');
+                        resolve(stdout);
+                    }
+                });
             });
         });
     } catch (error) {
