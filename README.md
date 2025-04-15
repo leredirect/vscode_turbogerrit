@@ -20,6 +20,14 @@ This extension contributes the following settings:
 
 ## Release Notes
 
+## 0.0.9
+- Silent push command added
+
+## 0.0.8
+- the diff viewer now supports A, M, D and R modifications
+- display a progress notification when sending a reply
+- autoupdate is suspended if there are expanded items in the plugin view
+
 ## 0.0.7
 - Basic notifications (WIP)
 

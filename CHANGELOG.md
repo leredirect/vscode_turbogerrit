@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.0.9]
+- Silent push command added
+
 ## [0.0.8]
 - the diff viewer now supports A, M, D and R modifications
 - display a progress notification when sending a reply

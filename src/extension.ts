@@ -25,6 +25,8 @@ async function registerCommands(context: vs.ExtensionContext) {
 
     const pushToGerritCommand =
         vs.commands.registerCommand('turbogerrit.pushToGerrit', pushToGerrit);
+    const pushToGerritSilentCommand =
+        vs.commands.registerCommand('turbogerrit.pushToGerritSilent', () => pushToGerrit(true));
     const initialSetupCommand =
         vs.commands.registerCommand('turbogerrit.initialSetup', initialSetup);
     const openDiffCommand =
@@ -57,6 +59,7 @@ async function registerCommands(context: vs.ExtensionContext) {
     context.subscriptions.push(vs.workspace.registerTextDocumentContentProvider(myScheme, myProvider));
     context.subscriptions.push(treeView);
     context.subscriptions.push(pushToGerritCommand);
+    context.subscriptions.push(pushToGerritSilentCommand);
     context.subscriptions.push(initialSetupCommand);
     context.subscriptions.push(openUrlCommand);
     context.subscriptions.push(openDiffCommand);
@@ -75,17 +78,17 @@ async function initialSetup() {
     await config.setEmail();
 }
 
-async function pushToGerrit() {
+async function pushToGerrit(silently: boolean) {
     let config = new ExtensionConfig().prepare(log);
     if (config === null) {
         return;
     }
-    const command = `cd ${config.cwd} && git push ssh://${config.username}@${config.gitReview.host}:${config.gitReview.port}/${config.gitReview.project} HEAD:refs/for/${config.currentBranch}${config.reviewersAttribute}`;
+    const command = `cd ${config.cwd} && git push ssh://${config.username}@${config.gitReview.host}:${config.gitReview.port}/${config.gitReview.project} HEAD:refs/for/${config.currentBranch}${silently ? '' : config.reviewersAttribute}`;
     log.i('Executing:');
     log.i(command);
     await vs.window.withProgress({
         location: vs.ProgressLocation.Notification,
-        title: `Pushing to refs/for/${config.currentBranch}`,
+        title: `${silently? 'Silently P' : 'P'}ushing to refs/for/${config.currentBranch}`,
     }, () => {
         return new Promise<void>(async resolve => {
             cp.exec(command,
