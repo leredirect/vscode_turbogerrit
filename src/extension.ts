@@ -24,7 +24,7 @@ async function registerCommands(context: vs.ExtensionContext) {
     });
 
     const pushToGerritCommand =
-        vs.commands.registerCommand('turbogerrit.pushToGerrit', pushToGerrit);
+        vs.commands.registerCommand('turbogerrit.pushToGerrit', () => pushToGerrit(false));
     const pushToGerritSilentCommand =
         vs.commands.registerCommand('turbogerrit.pushToGerritSilent', () => pushToGerrit(true));
     const initialSetupCommand =
@@ -83,7 +83,7 @@ async function pushToGerrit(silently: boolean) {
     if (config === null) {
         return;
     }
-    const command = `cd ${config.cwd} && git push ssh://${config.username}@${config.gitReview.host}:${config.gitReview.port}/${config.gitReview.project} HEAD:refs/for/${config.currentBranch}${silently ? '' : config.reviewersAttribute}`;
+    const command = `cd ${config.cwd} && git push ssh://${config.username}@${config.gitReview.host}:${config.gitReview.port}/${config.gitReview.project} HEAD:refs/for/${config.currentBranch}${silently === true? '' : config.reviewersAttribute}`;
     log.i('Executing:');
     log.i(command);
     await vs.window.withProgress({
